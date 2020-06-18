@@ -8,7 +8,7 @@ import {
     SwapQuoterOpts,
 } from '@0x/asset-swapper';
 import { OrderPrunerPermittedFeeTypes } from '@0x/asset-swapper/lib/src/types';
-import { getContractAddressesForChainOrThrow } from '@0x/contract-addresses';
+import { ContractAddresses, getContractAddressesForChainOrThrow } from '@0x/contract-addresses';
 import { ERC20TokenContract, WETH9Contract } from '@0x/contract-wrappers';
 import { assetDataUtils, SupportedProvider } from '@0x/order-utils';
 import { BigNumber, decodeThrownErrorAsRevertError, RevertError } from '@0x/utils';
@@ -27,6 +27,7 @@ import {
     DEFAULT_VALIDATION_GAS_LIMIT,
     GAS_LIMIT_BUFFER_MULTIPLIER,
     GST2_WALLET_ADDRESSES,
+    NULL_ADDRESS,
     ONE,
     PROTOCOL_FEE_UTILS_POLLING_INTERVAL_IN_MS,
     QUOTE_ORDER_EXPIRATION_BUFFER_MS,
@@ -56,6 +57,7 @@ export class SwapService {
     private readonly _gasTokenContract: ERC20TokenContract;
     private readonly _protocolFeeUtils: ProtocolFeeUtils;
     private readonly _forwarderAddress: string;
+    private readonly _contractAddresses: ContractAddresses;
 
     constructor(orderbook: Orderbook, provider: SupportedProvider) {
         this._provider = provider;
@@ -76,14 +78,14 @@ export class SwapService {
         this._swapQuoteConsumer = new SwapQuoteConsumer(this._provider, swapQuoterOpts);
         this._web3Wrapper = new Web3Wrapper(this._provider);
 
-        const contractAddresses = getContractAddressesForChainOrThrow(CHAIN_ID);
-        this._wethContract = new WETH9Contract(contractAddresses.etherToken, this._provider);
+        this._contractAddresses = getContractAddressesForChainOrThrow(CHAIN_ID);
+        this._wethContract = new WETH9Contract(this._contractAddresses.etherToken, this._provider);
         this._gasTokenContract = new ERC20TokenContract(
             getTokenMetadataIfExists('GST2', CHAIN_ID).tokenAddress,
             this._provider,
         );
         this._protocolFeeUtils = new ProtocolFeeUtils(PROTOCOL_FEE_UTILS_POLLING_INTERVAL_IN_MS);
-        this._forwarderAddress = contractAddresses.forwarder;
+        this._forwarderAddress = this._contractAddresses.forwarder;
     }
 
     public async calculateSwapQuoteAsync(params: CalculateSwapQuoteParams): Promise<GetSwapQuoteResponse> {
@@ -173,6 +175,7 @@ export class SwapService {
             estimatedGasTokenRefund,
             sources: serviceUtils.convertSourceBreakdownToArray(sourceBreakdown),
             orders: serviceUtils.cleanSignedOrderFields(orders),
+            allowanceTarget: this._contractAddresses.exchangeProxyAllowanceTarget,
         };
         return apiSwapQuote;
     }
@@ -281,6 +284,7 @@ export class SwapService {
             sellAmount: amount,
             sources: [],
             orders: [],
+            allowanceTarget: NULL_ADDRESS,
         };
         return apiSwapQuote;
     }
